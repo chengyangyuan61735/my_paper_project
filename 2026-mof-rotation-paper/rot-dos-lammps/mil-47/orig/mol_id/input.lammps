@@ -1,0 +1,25 @@
+
+units 		real
+dimension 	3
+boundary 	p p p 
+atom_style 	full
+
+pair_style      lj/cut 12.500
+bond_style      harmonic
+angle_style     cosine/periodic
+dihedral_style  harmonic
+improper_style  fourier
+
+special_bonds   lj/coul 0.0 0.0 1.0
+pair_modify     tail yes mix arithmetic
+dielectric      1.0
+box tilt        large
+read_data       data.MIL-47
+
+#### Atom Groupings ####
+group			linker	 type 3 4
+#### END Atom Groupings ####
+
+reset_atoms	mol	linker
+
+write_data		lammps-mol.data

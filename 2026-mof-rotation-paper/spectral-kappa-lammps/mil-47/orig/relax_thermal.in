@@ -1,0 +1,244 @@
+## ***************** Initialization # basis  ***************
+units                 metal
+dimension             3
+boundary              p   p   p
+atom_style            full
+atom_modify           map      hash
+# ******************  read data  *****************
+read_data             data.MIL-47
+
+# ******************* Define a few parameters  ********************** 
+
+variable              T        equal  300                        # average temperature   300K
+variable              DT       equal  0.001                     # timestep    0.5fs   (Read from the restart file)
+variable              T_low    equal  200                        # Heat sink             270K
+variable              T_high   equal  400                        # Heat source           330K
+
+variable              restartfile  string   optimize.restart     # Write the restart file in preparation for generating the force constant
+
+# *********************  Potential  function setting  *****************
+
+pair_style      lj/cut 12.500
+bond_style      harmonic
+angle_style     cosine/periodic
+dihedral_style  harmonic
+improper_style  fourier
+
+special_bonds   lj/coul 0.0 0.0 1.0
+pair_modify     tail yes mix arithmetic
+dielectric      1.0
+
+pair_coeff		1    1    0.000693825845       2.800986 # V_6+3 V_6+3
+pair_coeff		2    2    0.00260184692        3.118146 # O_2 O_2
+pair_coeff		3    3    0.00455323211        3.430851 # C_R C_R
+pair_coeff		4    4    0.00190802107        2.571134 # H_ H_
+
+bond_coeff	    1    10.686622612       2.024894  # V_6+3 O_2
+bond_coeff      2    30.98615131        1.269010  # O_2 C_R
+bond_coeff      3    20.06262711        1.379256  # C_R C_R
+bond_coeff      4    15.500085898       1.081418  # C_R H_
+bond_coeff      5    16.984401925       1.458000  # C_R C_R
+
+
+angle_coeff     1     4.8656611482      1       4 # O_2 V_6+3 O_2
+angle_coeff     2     3.709311785      -1       3 # V_6+3 O_2 C_R
+angle_coeff     3     2.99442529       -1       3 # V_6+3 O_2 V_6+3
+angle_coeff     4     4.8263179705     -1       3 # C_R C_R C_R
+angle_coeff     5     2.484287496      -1       3 # C_R C_R H_
+angle_coeff     6     4.4310875365     -1       3 # C_R C_R C_R
+angle_coeff     7     8.9667635084     -1       3 # O_2 C_R O_2
+angle_coeff     8     5.9718564432     -1       3 # O_2 C_R C_R
+
+dihedral_coeff  1     0.292148815      -1       2 # V_6+3 O_2 C_R O_2
+dihedral_coeff  2     0.146074407      -1       2 # C_R C_R C_R C_R
+dihedral_coeff  3     0.0542051441     -1       2 # C_R C_R C_R O_2
+
+improper_coeff  1     0.0867282306     1.000000   -1.000000    0.000000   0 # C_R C_R C_R H_
+
+
+# *********************  thermo output  ************************
+
+thermo              1000
+thermo_style      	custom  step  temp  lx  ly  lz  press  vol  pxx  pyy  pzz  pe  ke  etotal  #energy output
+
+## *********************** Initialization ##relaxation< ***********************
+## ***********************   Optimize at  0 K  ***********************
+## ***********************  Static equilibrium  **************************
+
+dump               1  all  custom  1000  dump.minimization  id  type  x  y  z  # Output the minimum structure, see whether the structure is reasonable
+dump_modify        1  sort  id
+
+#neighbor          0.3    bin
+#neigh_modify      once   yes          ### Generally no Settings are required
+
+fix                1  all  nve
+min_style          cg   
+minimize           1.0e-10 1.0e-20 1000000 1000000
+undump             1
+unfix              1
+
+#  *************************  Set velocity at 300K  **********************
+
+reset_timestep     0                                                                  # Time reset         
+velocity           all  create  ${T}  6926  mom  yes  rot  yes  dist  gaussian        # Setting Random  seed
+
+
+#  *************************  The following to  divide  block ***********************
+#  *************************  For X direction  **************************************
+
+variable         x_max        equal     lx
+variable         P            equal     ${x_max}/2-580
+variable         P1           equal     ${x_max}/2+580
+
+variable         tmp1         equal     ${P1}-${P}
+variable         tmp          equal     ${tmp1}/10
+
+variable         L1           equal     ${P}+1*${tmp}
+variable         R1           equal     ${P1}-1*${tmp}
+
+region          lfixed     block     INF   ${P}   INF   INF   INF   INF    units box
+region          rfixed     block     ${P1}  INF   INF   INF   INF   INF    units box
+
+region          hot        block     ${P}  ${L1}  INF   INF   INF   INF    units box
+region          cold       block     ${R1} ${P1}  INF   INF   INF   INF    units box
+
+region          fixed      union     2     lfixed    rfixed
+
+region          main       block     ${P}  ${P1}  INF   INF   INF   INF   units box
+
+#########
+region			hot_L      block     INF   ${L1}  INF   INF   INF   INF    units box
+region			cold_R     block     ${R1} INF    INF   INF   INF   INF    units box
+
+group			hot_L		region       hot_L
+###group	    hot_L		include		 molecule
+group			cold_R		region       cold_R
+###group		cold_R		include		 molecule
+#########
+
+group           hot         region       hot
+##group			hot			include		 molecule
+group           cold        region       cold
+##group			cold		include		 molecule
+
+group           lfixed      subtract     hot_L     hot
+group           rfixed      subtract     cold_R    cold
+
+group           main        subtract     all lfixed rfixed  
+
+## *****************  Frozen atomic group  **************         
+                    
+group           freeze      union       lfixed   rfixed
+
+##  **************  Freeze (Freeze some of the atoms of the model)  **************
+
+velocity         freeze    set       0.0   0.0   0.0    units box
+fix              3        freeze     nve/noforce                   
+
+## ***************  Calculate some thermodymanic quantities  *******************
+
+compute          Thot     hot        temp/region        hot
+compute          Tcold    cold       temp/region        cold
+compute          Ftemp    freeze     temp/region        fixed
+
+# ****************  Compute temperature  *****************
+
+compute	          ALLKe      all     ke/atom                    
+variable          KB         equal   8.625e-5                    
+variable          TEMP       atom    c_ALLKe/1.5/${KB} 
+fix               Totaltemperatom    all     ave/atom      10   5000   50000   v_TEMP
+
+# ****************  Now optimize at 300K  ********************
+# ****************  The 1nd equilibration run  ********************
+
+fix                1      main      nvt     temp     ${T}    ${T}    0.1
+dump               1      all      custom   50000   dump.optimize   id   type   x   y   z   f_Totaltemperatom 
+dump_modify        1      sort id                                                                                 ## Sort each atom                                                                       
+
+thermo_style       custom   step    temp   lx   ly   lz   c_Thot   c_Tcold   c_Ftemp  press  pe  ke  etotal 
+thermo	           1000
+
+## Set the time_step
+
+timestep                    ${DT}
+
+#restart
+#restart           500000    optimize.*.restart
+
+run		            1000000
+
+undump              1
+unfix               1
+
+##*****************  Velocity groups for transmission calculation  *****************
+
+variable        dmid         equal     6                                    ## Set to 6 (A) here
+variable        middle       equal     ${x_max}/2 
+variable        mid_left     equal     ${middle}-${dmid}
+variable        mid_right    equal     ${middle}+${dmid}-0.3
+
+region          int_L        block     ${mid_left}   ${middle}     INF  INF   INF   INF    units box
+region          int_R        block     ${middle}     ${mid_right}  INF  INF   INF   INF    units box
+region          int          block     ${mid_left}   ${mid_right}  INF  INF   INF   INF    units box
+
+group			interface	 region    int
+##group           interface    include   molecule
+group           interface_L  region    int_L
+##group			interface_L  include   molecule
+group           interface_R  subtract  interface  interface_L
+
+#minimize        0     1.0e-3    1000    1000                      # (optional)
+
+dump             1  all  custom  1000  dump.minimization2  id  type  x  y  z  # Output the minimum structure, see whether the structure is reasonable
+dump_modify      1  sort  id
+
+min_style        cg   
+minimize         1.0e-10    1.0e-20    1000000   1000000
+
+run              0
+undump		     1
+
+write_restart      ${restartfile}
+
+
+#  ************************ The second stage  **********************
+#  ************************ The 2nd equilibration run  **********************
+#  ************************ Write  a  shell  script  to  generate velocity random number  *******************
+
+variable         hot_velocity       equal        61153
+variable         cold_velocity      equal        27117
+variable         random_seed        equal        0.1                ## To get excellent kinetic properties, this is a good choice
+
+fix              1       main      nve
+fix              Hot     hot       langevin    ${T_high}  ${T_high}       ${random_seed}     ${hot_velocity}     tally   yes
+fix              Cold    cold      langevin    ${T_low}   ${T_low}        ${random_seed}     ${cold_velocity}    tally   yes    #langevin
+
+
+## Write interfacial structure to file for Ovito visualization
+
+dump               1      all   custom   50000   dump.heatflux    id   type   x   y   z   f_Totaltemperatom
+dump_modify        1      sort  id
+
+
+variable           tdiff    equal   c_Thot-c_Tcold
+
+thermo_style       custom   step    temp   lx   ly   lz   c_Thot   c_Tcold   c_Ftemp   f_Hot   f_Cold  v_tdiff 
+thermo	           1000
+
+run                6000000 
+
+unfix              Totaltemperatom
+undump             1
+
+# **************************  Collect Velocities for the calculation of force constants *************************
+
+variable           dn     equal    10            
+
+dump               vels   interface   custom    ${dn}   vels.dat   id   type   vx   vy   vz
+dump_modify        vels   format      line      "%d   %d   %0.8g   %0.8g   %0.8g"
+dump_modify        vels   sort        id
+
+run                6000000
+
+undump             vels
+

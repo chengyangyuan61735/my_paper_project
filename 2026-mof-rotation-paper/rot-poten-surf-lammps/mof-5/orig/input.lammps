@@ -1,0 +1,43 @@
+variable	a loop 41 
+variable	t index -40 -38 -36 -34 -32 -30	-28	-26	-24	-22	-20	-18	-16	-14	-12	-10	-8	-6	-4	-2	0	2	4	6	8	10	12	14	16	18	20	22	24	26	28	30 32 34 36 38 40
+
+units			real
+boundary		p p p
+box             tilt large
+atom_style		full
+
+pair_style      lj/cut 12.500
+bond_style      harmonic
+angle_style     hybrid cosine/periodic fourier
+dihedral_style  harmonic
+improper_style  fourier
+
+dielectric      1.0
+special_bonds   lj/coul 0.0 0.0 1.0
+pair_modify     tail yes mix arithmetic
+box tilt        large
+read_data       lammps.data
+
+group			rot	id	122 123 124 132 133 1704 1705 1706 1708 1709
+group			mobile	subtract all rot
+
+displace_atoms	rot	rotate	24.424016030390 	19.265302395450 	19.265302395450   2.815967939219 	0.000000000000 	0.000000000000     $t
+
+fix				freeze_linker	rot		setforce	0.0 0.0 0.0
+
+fix				min	mobile	nve
+minimize		0.0 1.0e-20	10000 100000	
+
+write_data		rot$a.data
+
+variable    	ep equal pe
+print       	"Rotation angle: $t deg, Potential Energy: ${ep}"
+
+unfix			min
+unfix			freeze_linker
+
+
+clear
+next		t
+next		a
+jump		input.lammps

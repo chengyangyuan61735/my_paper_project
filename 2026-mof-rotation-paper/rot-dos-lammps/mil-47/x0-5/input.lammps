@@ -1,0 +1,56 @@
+variable	a loop 4 
+variable	t index 280	577	340	788	
+	
+log			log.$a
+
+###
+variable	dt		equal	1.0
+variable	T		equal	300
+###
+
+units 		real
+dimension 	3
+boundary 	p p p 
+atom_style 	full
+
+pair_style      lj/cut 12.500
+bond_style      harmonic
+angle_style     cosine/periodic
+dihedral_style  harmonic
+improper_style  fourier
+
+special_bonds   lj/coul 0.0 0.0 1.0
+pair_modify     tail yes mix arithmetic
+dielectric      1.0
+box tilt        large
+read_data       lammps-mol.data
+
+timestep        ${dt} 
+
+###
+group		node	type	1 2
+group		linker	type	3 4
+velocity    all create ${T} $t mom yes rot yes dist gaussian
+###
+
+# NVT ensemble
+dump		1 all custom 10000 dump.nvt$a.lammpstrj id mol type x y z 
+fix 		nvt all nvt temp $T $T $(100.0*dt)
+fix			drift all momentum 1 linear 1 1 1 rescale
+thermo	        1000
+thermo_style    custom step temp lx ly lz press vol pxx pyy pzz pe ke etotal
+run           	500000
+
+compute			link	linker	chunk/atom	molecule
+compute			omega	linker	omega/chunk	link
+fix			    dos		linker	ave/time	1	1	1	c_omega[*]	file	omega$a.out	mode	vector
+run				10000
+unfix           nvt
+unfix			drift
+unfix			dos
+undump			1
+
+clear
+next		t
+next		a
+jump		input.lammps

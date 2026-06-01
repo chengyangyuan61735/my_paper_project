@@ -1,0 +1,92 @@
+## ***************** Initialization # basis  ***************
+units                       metal
+dimension                   3
+boundary                    p   p   p
+atom_style                  full
+
+# ****************** Read restart file *****************
+
+read_restart            optimize.restart        # The statement "atom_modify map hash" must be added to the 'in file' that generates the restart file
+
+
+
+# *******************  Define a few parameters  ********************** 
+
+variable              T        equal  300                        # Average temperature   300K
+variable              DT       equal  0.001                     # Timestep    0.5fs   (Read from the restart file)
+
+# *********************  Potential  function setting  *****************
+
+pair_style      lj/cut 12.500
+bond_style      harmonic
+angle_style     cosine/periodic
+dihedral_style  harmonic
+improper_style  fourier
+
+special_bonds   lj/coul 0.0 0.0 1.0
+pair_modify     tail yes mix arithmetic
+dielectric      1.0
+
+pair_coeff		1    1    0.000693825845       2.800986 # V_6+3 V_6+3
+pair_coeff		2    2    0.00260184692        3.118146 # O_2 O_2
+pair_coeff		3    3    0.00455323211        3.430851 # C_R C_R
+pair_coeff		4    4    0.00190802107        2.571134 # H_ H_
+
+bond_coeff	    1    10.686622612       2.024894  # V_6+3 O_2
+bond_coeff      2    30.98615131        1.269010  # O_2 C_R
+bond_coeff      3    20.06262711        1.379256  # C_R C_R
+bond_coeff      4    15.500085898       1.081418  # C_R H_
+bond_coeff      5    16.984401925       1.458000  # C_R C_R
+
+
+angle_coeff     1     4.8656611482      1       4 # O_2 V_6+3 O_2
+angle_coeff     2     3.709311785      -1       3 # V_6+3 O_2 C_R
+angle_coeff     3     2.99442529       -1       3 # V_6+3 O_2 V_6+3
+angle_coeff     4     4.8263179705     -1       3 # C_R C_R C_R
+angle_coeff     5     2.484287496      -1       3 # C_R C_R H_
+angle_coeff     6     4.4310875365     -1       3 # C_R C_R C_R
+angle_coeff     7     8.9667635084     -1       3 # O_2 C_R O_2
+angle_coeff     8     5.9718564432     -1       3 # O_2 C_R C_R
+
+dihedral_coeff  1     0.292148815      -1       2 # V_6+3 O_2 C_R O_2
+dihedral_coeff  2     0.146074407      -1       2 # C_R C_R C_R C_R
+dihedral_coeff  3     0.0542051441     -1       2 # C_R C_R C_R O_2
+
+improper_coeff  1     0.0867282306     1.000000   -1.000000    0.000000   0 # C_R C_R C_R H_
+
+
+timestep         ${DT}
+
+# The grouping methods are no need here, since they have been defined in thermal.in file
+##  **************  Freeze (Freeze some of the atoms of the model)  **************
+
+velocity         freeze    set       0.0   0.0   0.0    units box
+fix              3        freeze     nve/noforce                   
+
+## ****************  Sampling data and run 0 *****************
+
+fix              1          main          nve
+
+variable 	     N          equal    "count(all)"
+variable	     NL         equal    "count(interface_L)"
+variable 	     NR         equal    "count(interface_R)"
+
+print 		     "NL  ${NL}"  
+print  		     "NR  ${NR}"  
+
+## dump group ids
+
+dump             left      interface_L         custom   1   dump.left   id
+dump_modify      left      sort id
+
+dump             right     interface_R         custom   1   dump.right   id
+dump_modify      right     sort id
+
+dump             interface     interface       custom   1   dump.interface   id
+dump_modify      interface     sort id
+
+run              0
+
+undump           left
+undump           right
+undump           interface

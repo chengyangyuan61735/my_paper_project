@@ -1,0 +1,2 @@
+kappa1 kappa2 kappa3 kappa4 kappa5 kappa6 kappa7 kappa8 kappa9 kappa10 kappa11 kappa12 kappa13 kappa14 kappa15 kappa16 kappa17 kappa18 kappa19 kappa20 kappa_ave kappa_error_bar
+1.32061 2.4914 1.22399 1.58027 2.61471 2.10473 2.38479 2.38526 2.59223 2.30305 1.66366 1.75866 1.86407 2.63045 1.74702 1.71203 2.42938 2.56701 1.59096 1.94221 2.04533 0.102328
